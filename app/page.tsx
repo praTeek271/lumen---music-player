@@ -550,20 +550,9 @@ function EmptyState({ onOpen }: { onOpen: () => void }) {
             lineHeight: 1.6,
           }}
         >
-          Drop audio files here, scan a music folder, or pick individual tracks
-          to begin.
-        </p>
-        <p
-          style={{
-            fontSize: 13,
-            color: "rgba(255,255,255,0.35)",
-            marginTop: 8,
-            lineHeight: 1.6,
-          }}
-        >
           Free and open-source, built for those who enjoy music.{" "}
           <a
-            href="https://github.com/your-repo"
+            href="https://github.com/praTeek271/lumen---music-player"
             target="_blank"
             rel="noopener noreferrer"
             style={{

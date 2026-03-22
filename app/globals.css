@@ -1,0 +1,79 @@
+/* app/globals.css */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Variables ─────────────────────────────────────────────────────── */
+:root {
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+}
+
+/* ── Reset / Base ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  height: 100%;
+  overflow: hidden;
+  background: #0a0508;
+  color: rgba(255,255,255,0.88);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
+}
+
+/* Safe area helpers */
+.safe-top    { padding-top:    env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
+
+/* Scrollbar */
+::-webkit-scrollbar       { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+/* Tap highlight */
+button, a { -webkit-tap-highlight-color: transparent; outline: none; }
+
+/* ── Keyframes ─────────────────────────────────────────────────────── */
+@keyframes ambientDrift {
+  0%   { transform: translate(0,    0)    scale(1);    }
+  33%  { transform: translate(35px, -28px) scale(1.06); }
+  66%  { transform: translate(-18px, 22px) scale(0.96); }
+  100% { transform: translate(0,    0)    scale(1);    }
+}
+
+@keyframes fadeSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px);  }
+  50%       { transform: translateY(-10px); }
+}
+
+@keyframes nowPlayingBar {
+  0%, 100% { transform: scaleY(0.3); }
+  50%       { transform: scaleY(1);   }
+}
+
+@keyframes ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+
+/* ── Utility animations ────────────────────────────────────────────── */
+.animate-fade-slide-up  { animation: fadeSlideUp 0.65s cubic-bezier(0.16,1,0.3,1) both; }
+.animate-float          { animation: float 6s ease-in-out infinite; }
+.animate-spin-slower    { animation: spin 12s linear infinite; }
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

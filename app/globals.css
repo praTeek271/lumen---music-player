@@ -1,18 +1,43 @@
-/* app/globals.css */
+/* app/globals.css — LUMEN monochrome theme */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Variables ─────────────────────────────────────────────────────── */
+/* ── Design tokens — monochrome only ──────────────────────────────── */
 :root {
   --font-display: 'Playfair Display', Georgia, serif;
-  --font-body:    'DM Sans', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+
+  /* Surface layers */
+  --bg-base: #0a0a0a;
+  --bg-raised: rgba(255, 255, 255, 0.06);
+  --bg-elevated: rgba(255, 255, 255, 0.10);
+
+  /* Glass */
+  --glass-light: rgba(255, 255, 255, 0.14);
+  --glass-dark: rgba(0, 0, 0, 0.40);
+  --glass-border: rgba(255, 255, 255, 0.12);
+
+  /* Text */
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.50);
+  --text-muted: rgba(255, 255, 255, 0.28);
+
+  /* Accent — pure white only */
+  --accent: #ffffff;
+  --accent-dim: rgba(255, 255, 255, 0.60);
 }
 
 /* ── Reset / Base ──────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 html {
   height: 100%;
@@ -22,8 +47,8 @@ html {
 body {
   height: 100%;
   overflow: hidden;
-  background: #0a0508;
-  color: rgba(255,255,255,0.88);
+  background: var(--bg-base);
+  color: var(--text-primary);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -33,47 +58,123 @@ body {
 }
 
 /* Safe area helpers */
-.safe-top    { padding-top:    env(safe-area-inset-top, 0px); }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
 
-/* Scrollbar */
-::-webkit-scrollbar       { width: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+/* Scrollbar — monochrome */
+::-webkit-scrollbar {
+  width: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.30);
+}
 
 /* Tap highlight */
-button, a { -webkit-tap-highlight-color: transparent; outline: none; }
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
 
 /* ── Keyframes ─────────────────────────────────────────────────────── */
 @keyframes ambientDrift {
-  0%   { transform: translate(0,    0)    scale(1);    }
-  33%  { transform: translate(35px, -28px) scale(1.06); }
-  66%  { transform: translate(-18px, 22px) scale(0.96); }
-  100% { transform: translate(0,    0)    scale(1);    }
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(35px, -28px) scale(1.06);
+  }
+
+  66% {
+    transform: translate(-18px, 22px) scale(0.96);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
 }
 
 @keyframes fadeSlideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0px);  }
-  50%       { transform: translateY(-10px); }
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
-@keyframes nowPlayingBar {
-  0%, 100% { transform: scaleY(0.3); }
-  50%       { transform: scaleY(1);   }
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-@keyframes ping {
-  75%, 100% { transform: scale(2); opacity: 0; }
+@keyframes menuPopUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
 }
 
-/* ── Utility animations ────────────────────────────────────────────── */
-.animate-fade-slide-up  { animation: fadeSlideUp 0.65s cubic-bezier(0.16,1,0.3,1) both; }
-.animate-float          { animation: float 6s ease-in-out infinite; }
-.animate-spin-slower    { animation: spin 12s linear infinite; }
+/* ── Utility ────────────────────────────────────────────────────────── */
+.animate-fade-slide-up {
+  animation: fadeSlideUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-spin-slower {
+  animation: spin 12s linear infinite;
+}
+
+@keyframes loadingSlide {
+  0% {
+    left: -40%;
+  }
+
+  100% {
+    left: 100%;
+  }
+}

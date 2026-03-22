@@ -2,20 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Remove X-Powered-By header for security
-  poweredByHeader: false,
-
-  // Enable gzip/brotli compression on Vercel edge
-  compress: true,
-
-  // Use sharp (installed as devDep) for image optimisation on Vercel
-  images: {
-    formats: ["image/avif", "image/webp"],
+  // Next.js 15: experimental features for better performance
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'react-icons'],
   },
 
-  // Prevent Next.js from bundling Node built-ins on the client
   webpack(config, { isServer }) {
     if (!isServer) {
+      // Prevent Node.js built-ins from being bundled for the browser
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
@@ -30,24 +24,20 @@ const nextConfig = {
   async headers() {
     return [
       {
-        // Service worker must not be cached so updates are picked up immediately
-        source: "/sw.js",
+        source: '/sw.js',
         headers: [
-          {
-            key: "Cache-Control",
-            value: "no-cache, no-store, must-revalidate",
-          },
-          { key: "Service-Worker-Allowed", value: "/" },
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' },
         ],
       },
       {
-        // Immutable cache for hashed static assets
-        source: "/_next/static/(.*)",
+        // Security headers for PWA
+        source: '/(.*)',
         headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
+          { key: 'X-Content-Type-Options',    value: 'nosniff' },
+          { key: 'X-Frame-Options',           value: 'DENY' },
+          { key: 'Referrer-Policy',           value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy',        value: 'camera=(), microphone=()' },
         ],
       },
     ];

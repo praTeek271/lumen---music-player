@@ -54,7 +54,7 @@ export function PlaybackBar({ onQueueOpen, onScanOpen, onPickFiles }: PlaybackBa
   /* ── Volume timer ─────────────────────────────────────────────── */
   const resetVolTimer = useCallback(() => {
     if (volTimerRef.current) clearTimeout(volTimerRef.current);
-    volTimerRef.current = setTimeout(() => setVolOpen(false), 5000);
+    volTimerRef.current = setTimeout(() => setVolOpen(false), 1500);
   }, []);
   const openVol = useCallback(() => { setVolOpen(true); resetVolTimer(); }, [resetVolTimer]);
   useEffect(() => () => { if (volTimerRef.current) clearTimeout(volTimerRef.current); }, []);

@@ -1,5 +1,5 @@
 'use client';
-// components/DropOverlay.tsx - Full-screen drag and drop overlay
+// components/DropOverlay.tsx — monochrome drop target overlay
 
 import { Music } from 'lucide-react';
 
@@ -10,53 +10,66 @@ interface DropOverlayProps {
 export function DropOverlay({ isDragging }: DropOverlayProps) {
   return (
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center pointer-events-none transition-all duration-200 ${
-        isDragging ? 'opacity-100' : 'opacity-0'
-      }`}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        pointerEvents: 'none',
+        opacity: isDragging ? 1 : 0,
+        transition: 'opacity 0.18s ease',
+      }}
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: 'rgba(10, 6, 24, 0.88)',
-          backdropFilter: 'blur(12px)',
-        }}
-      />
+      {/* Dark blur backdrop */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'rgba(0,0,0,0.82)',
+        backdropFilter: 'blur(14px)',
+      }} />
 
-      {/* Content */}
-      <div
-        className="relative flex flex-col items-center gap-6 px-12 py-10 rounded-3xl"
-        style={{
-          background: 'rgba(124, 58, 237, 0.15)',
-          border: '2px dashed rgba(167, 139, 250, 0.5)',
-          boxShadow: '0 0 80px rgba(124,58,237,0.3)',
-        }}
-      >
-        <div
-          className="w-20 h-20 rounded-2xl flex items-center justify-center"
-          style={{ background: 'rgba(124,58,237,0.25)' }}
-        >
-          <Music size={36} className="text-purple-400 animate-bounce" />
-        </div>
-        <div className="text-center">
-          <p className="text-white text-2xl font-bold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-            Drop to Play
-          </p>
-          <p className="text-purple-300 text-sm mt-1 opacity-80">
-            Release to add to queue and play
-          </p>
+      {/* Drop target card — white dashed border */}
+      <div style={{
+        position: 'relative',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', gap: 18,
+        padding: '40px 56px',
+        borderRadius: 28,
+        background: 'rgba(255,255,255,0.05)',
+        border: '2px dashed rgba(255,255,255,0.35)',
+        boxShadow: '0 0 60px rgba(255,255,255,0.04)',
+      }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: 18,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(255,255,255,0.08)',
+          border: '1px solid rgba(255,255,255,0.12)',
+        }}>
+          <Music size={32} style={{ color: 'rgba(255,255,255,0.70)' }} />
         </div>
 
-        {/* Animated rings */}
-        <div className="absolute inset-0 rounded-3xl">
-          <div
-            className="absolute inset-0 rounded-3xl animate-ping"
-            style={{
-              border: '2px solid rgba(167,139,250,0.2)',
-              animationDuration: '1.5s',
-            }}
-          />
+        <div style={{ textAlign: 'center' }}>
+          <p style={{
+            fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700,
+            color: 'rgba(255,255,255,0.90)', margin: 0, letterSpacing: '-0.01em',
+          }}>
+            Drop to Add
+          </p>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.40)', marginTop: 6 }}>
+            Release to add to queue
+          </p>
         </div>
+
+        {/* Expanding ring animation */}
+        <div style={{
+          position: 'absolute', inset: -2, borderRadius: 28,
+          border: '2px solid rgba(255,255,255,0.12)',
+          animation: isDragging ? 'dropRing 1.4s ease-out infinite' : 'none',
+        }} />
+
+        <style>{`
+          @keyframes dropRing {
+            0%   { transform: scale(1);    opacity: 0.6; }
+            100% { transform: scale(1.08); opacity: 0;   }
+          }
+        `}</style>
       </div>
     </div>
   );

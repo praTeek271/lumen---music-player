@@ -1,87 +1,130 @@
-// lib/db.ts — IndexedDB schema v2
-// Key change: TrackMeta now stores a FileSystemFileHandle (where available).
-// The handle survives page reload and can be used to re-obtain the File object,
-// which lets us rebuild the audio blob URL without asking the user to re-add files.
-//
-// Schema upgraded from v1 → v2 (addedAt index preserved, fileHandle column added).
+// lib/db.ts — LUMEN IndexedDB schema v3
+// New in v3:
+//  • `musicFolders` store — persists FileSystemDirectoryHandle objects for
+//    root music folders the user has granted access to. These are reloaded
+//    silently on every app start, no re-picking required.
+//  • DB renamed from 'aura-music' to 'omp' (clean break from old installs)
 
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, DBSchema, IDBPDatabase } from "idb";
 
 export interface TrackMeta {
-  id:        string;                        // stable fingerprint (name+size+mtime hash)
-  name:      string;                        // original filename
-  title:     string;
-  artist:    string;
-  album:     string;
-  duration:  number;                        // seconds
-  coverUrl?: string;                        // ephemeral object URL — rebuilt each session
-  coverData?: { data: number[]; format: string }; // persisted raw cover bytes for reload
-  fileHandle?: FileSystemFileHandle;        // ← NEW: survives reload via IDB structured clone
-  addedAt:   number;
+  id: string;
+  name: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  coverUrl?: string;
+  coverData?: { data: number[]; format: string };
+  fileHandle?: FileSystemFileHandle;
+  addedAt: number;
 }
 
-interface AuraDB extends DBSchema {
+export interface SavedFolder {
+  id: string; // random uuid assigned when saved
+  name: string; // folder display name
+  handle: FileSystemDirectoryHandle; // survives reload via IDB structured clone
+  savedAt: number;
+}
+
+interface OmpDB extends DBSchema {
   queue: {
     key: string;
     value: TrackMeta;
-    indexes: { 'by-addedAt': number };
+    indexes: { "by-addedAt": number };
   };
   settings: {
     key: string;
     value: string | number | boolean;
   };
+  musicFolders: {
+    key: string;
+    value: SavedFolder;
+  };
 }
 
-let dbPromise: Promise<IDBPDatabase<AuraDB>> | null = null;
+let dbPromise: Promise<IDBPDatabase<OmpDB>> | null = null;
 
 export function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<AuraDB>('aura-music', 2, {
+    dbPromise = openDB<OmpDB>("omp", 3, {
       upgrade(db, oldVersion) {
-        // v1 → v2: add queue store if missing (handles fresh installs too)
-        if (!db.objectStoreNames.contains('queue')) {
-          const store = db.createObjectStore('queue', { keyPath: 'id' });
-          store.createIndex('by-addedAt', 'addedAt');
+        // Fresh install or upgrade from any old version
+        if (!db.objectStoreNames.contains("queue")) {
+          const s = db.createObjectStore("queue", { keyPath: "id" });
+          s.createIndex("by-addedAt", "addedAt");
         }
-        if (!db.objectStoreNames.contains('settings')) {
-          db.createObjectStore('settings');
+        if (!db.objectStoreNames.contains("settings")) {
+          db.createObjectStore("settings");
         }
-        // No column migration needed — IDB is schemaless per record
+        // v3: folder handles store
+        if (!db.objectStoreNames.contains("musicFolders")) {
+          db.createObjectStore("musicFolders", { keyPath: "id" });
+        }
       },
     });
   }
   return dbPromise;
 }
 
+/* ── Queue ──────────────────────────────────────────────────────────── */
 export async function saveTrack(track: TrackMeta) {
   const db = await getDB();
-  // Strip ephemeral coverUrl before persisting — we'll rebuild it from coverData
-  const toStore: TrackMeta = { ...track, coverUrl: undefined };
-  await db.put('queue', toStore);
+  await db.put("queue", { ...track, coverUrl: undefined });
 }
 
 export async function getAllTracks(): Promise<TrackMeta[]> {
   const db = await getDB();
-  const all = await db.getAllFromIndex('queue', 'by-addedAt');
-  return all.reverse(); // newest first
+  const all = await db.getAllFromIndex("queue", "by-addedAt");
+  return all.reverse();
 }
 
 export async function removeTrack(id: string) {
   const db = await getDB();
-  await db.delete('queue', id);
+  await db.delete("queue", id);
 }
 
 export async function clearQueue() {
   const db = await getDB();
-  await db.clear('queue');
+  await db.clear("queue");
 }
 
-export async function saveSetting(key: string, value: string | number | boolean) {
+/* ── Music folder handles ────────────────────────────────────────────── */
+export async function saveMusicFolder(
+  handle: FileSystemDirectoryHandle,
+): Promise<string> {
   const db = await getDB();
-  await db.put('settings', value, key);
+  const id = crypto.randomUUID();
+  const rec: SavedFolder = {
+    id,
+    name: handle.name,
+    handle,
+    savedAt: Date.now(),
+  };
+  await db.put("musicFolders", rec);
+  return id;
+}
+
+export async function getAllMusicFolders(): Promise<SavedFolder[]> {
+  const db = await getDB();
+  return db.getAll("musicFolders");
+}
+
+export async function removeMusicFolder(id: string) {
+  const db = await getDB();
+  await db.delete("musicFolders", id);
+}
+
+/* ── Settings ────────────────────────────────────────────────────────── */
+export async function saveSetting(
+  key: string,
+  value: string | number | boolean,
+) {
+  const db = await getDB();
+  await db.put("settings", value, key);
 }
 
 export async function getSetting(key: string) {
   const db = await getDB();
-  return db.get('settings', key);
+  return db.get("settings", key);
 }

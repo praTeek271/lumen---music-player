@@ -35,6 +35,30 @@ export interface FolderEntry {
   accessible: boolean; // false = permission denied after reload
 }
 
+export interface PlaylistEntry {
+  name: string; // M3U filename without extension
+  files: File[];
+  handles: FileSystemFileHandle[];
+}
+
+// ── Parse an M3U/M3U8 text and return ordered basenames ─────────────────────
+function parseM3UText(text: string): string[] {
+  const basenames: string[] = [];
+  const seen = new Set<string>();
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    // Normalize Windows/Unix separators and extract basename
+    const bn =
+      trimmed.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
+    if (bn && !seen.has(bn)) {
+      seen.add(bn);
+      basenames.push(bn);
+    }
+  }
+  return basenames;
+}
+
 export function useMusicFolders() {
   const { addFiles } = usePlayer();
 
@@ -48,41 +72,50 @@ export function useMusicFolders() {
     );
   }, []);
 
-  // ── Collect audio files from a directory handle (one level deep) ────────
+  // ── Collect audio files + M3U playlists from a directory handle ───────────
+  // Scans the root and one level of subdirectories (covers common layouts:
+  //   Music/song.mp3, Music/Artist/song.mp3, Music/Playlists/list.m3u)
   async function collectAudioFiles(
     handle: FileSystemDirectoryHandle,
-  ): Promise<{ files: File[]; handles: FileSystemFileHandle[] }> {
-    const files: File[] = [];
-    const handles: FileSystemFileHandle[] = [];
+  ): Promise<{
+    files: File[];
+    handles: FileSystemFileHandle[];
+    playlists: PlaylistEntry[];
+  }> {
+    // Map keyed by lowercased filename for O(1) M3U resolution
+    const audioMap = new Map<
+      string,
+      { file: File; fh: FileSystemFileHandle }
+    >();
+    const m3uList: { file: File; name: string }[] = [];
+
+    const tryFile = async (entry: FileSystemFileHandle) => {
+      try {
+        const file = await entry.getFile();
+        const lc = file.name.toLowerCase();
+        if (isAudioFile(file)) {
+          audioMap.set(lc, { file, fh: entry });
+        } else if (lc.endsWith(".m3u") || lc.endsWith(".m3u8")) {
+          const nameNoExt = file.name.replace(/\.m3u8?$/i, "");
+          m3uList.push({ file, name: nameNoExt });
+        }
+      } catch {
+        /* unreadable — skip */
+      }
+    };
 
     try {
       for await (const entry of (handle as any).values()) {
         if (entry.kind === "file") {
-          try {
-            const file = await (entry as FileSystemFileHandle).getFile();
-            if (isAudioFile(file)) {
-              files.push(file);
-              handles.push(entry);
-            }
-          } catch {
-            /* unreadable — skip */
-          }
+          await tryFile(entry as FileSystemFileHandle);
         } else if (entry.kind === "directory") {
-          // One level of subdirectory
+          // One level of subdirectory (covers Artist/ and Playlist/ folders)
           try {
             for await (const sub of (
               entry as FileSystemDirectoryHandle as any
             ).values()) {
               if (sub.kind === "file") {
-                try {
-                  const file = await (sub as FileSystemFileHandle).getFile();
-                  if (isAudioFile(file)) {
-                    files.push(file);
-                    handles.push(sub);
-                  }
-                } catch {
-                  /* skip */
-                }
+                await tryFile(sub as FileSystemFileHandle);
               }
             }
           } catch {
@@ -94,7 +127,43 @@ export function useMusicFolders() {
       /* permission denied */
     }
 
-    return { files, handles };
+    // ── Resolve each M3U into an ordered file list ──────────────────────────
+    const playlists: PlaylistEntry[] = [];
+    const claimedByPlaylist = new Set<string>(); // basenames already in a playlist
+
+    for (const { file, name } of m3uList) {
+      try {
+        const text = await file.text();
+        const basenames = parseM3UText(text);
+        const pFiles: File[] = [];
+        const pHandles: FileSystemFileHandle[] = [];
+        for (const bn of basenames) {
+          const entry = audioMap.get(bn);
+          if (entry) {
+            pFiles.push(entry.file);
+            pHandles.push(entry.fh);
+            claimedByPlaylist.add(bn);
+          }
+        }
+        if (pFiles.length > 0) {
+          playlists.push({ name, files: pFiles, handles: pHandles });
+        }
+      } catch {
+        /* skip unparseable M3U */
+      }
+    }
+
+    // ── Remaining audio files not referenced by any M3U ─────────────────────
+    const files: File[] = [];
+    const handles: FileSystemFileHandle[] = [];
+    for (const [lc, { file, fh }] of audioMap) {
+      if (!claimedByPlaylist.has(lc)) {
+        files.push(file);
+        handles.push(fh);
+      }
+    }
+
+    return { files, handles, playlists };
   }
 
   // ── Re-verify permission for a stored handle ────────────────────────────
@@ -124,27 +193,24 @@ export function useMusicFolders() {
         for (const folder of saved) {
           const accessible = await verifyPermission(folder.handle);
 
-          if (accessible && addToQueue) {
-            const { files, handles } = await collectAudioFiles(folder.handle);
-            if (files.length) await addFiles(files, handles);
-          }
-
-          // Count files for display (even if not adding to queue)
+          // collectAudioFiles also gives us the track count — avoids a second scan
           let trackCount = 0;
           if (accessible) {
-            try {
-              for await (const e of (folder.handle as any).values()) {
-                if (e.kind === "file") {
-                  try {
-                    const f = await e.getFile();
-                    if (isAudioFile(f)) trackCount++;
-                  } catch {
-                    /* skip */
-                  }
-                }
+            const { files, handles, playlists } = await collectAudioFiles(
+              folder.handle,
+            );
+            const playlistCount = playlists.reduce(
+              (s, p) => s + p.files.length,
+              0,
+            );
+            trackCount = files.length + playlistCount;
+
+            if (addToQueue) {
+              // Enqueue playlist tracks in M3U order first, then loose files
+              for (const pl of playlists) {
+                if (pl.files.length) await addFiles(pl.files, pl.handles);
               }
-            } catch {
-              /* skip */
+              if (files.length) await addFiles(files, handles);
             }
           }
 
@@ -186,17 +252,21 @@ export function useMusicFolders() {
       const id = await saveMusicFolder(handle);
 
       // Scan and add to queue immediately
-      const { files, fileHandles: fh } = await (async () => {
-        const { files, handles } = await collectAudioFiles(handle);
-        return { files, fileHandles: handles };
-      })();
+      const { files, handles, playlists } = await collectAudioFiles(handle);
 
-      if (files.length) await addFiles(files, fh);
+      // Enqueue playlist tracks in M3U order first, then loose files
+      for (const pl of playlists) {
+        if (pl.files.length) await addFiles(pl.files, pl.handles);
+      }
+      if (files.length) await addFiles(files, handles);
+
+      const totalCount =
+        files.length + playlists.reduce((s, p) => s + p.files.length, 0);
 
       // Count and update folder list
       setFolders((prev) => [
         ...prev,
-        { id, name: handle.name, trackCount: files.length, accessible: true },
+        { id, name: handle.name, trackCount: totalCount, accessible: true },
       ]);
     } catch (err: any) {
       if (err?.name !== "AbortError")
@@ -212,7 +282,10 @@ export function useMusicFolders() {
       if (!rec) return;
       const ok = await verifyPermission(rec.handle);
       if (!ok) return;
-      const { files, handles } = await collectAudioFiles(rec.handle);
+      const { files, handles, playlists } = await collectAudioFiles(rec.handle);
+      for (const pl of playlists) {
+        if (pl.files.length) await addFiles(pl.files, pl.handles);
+      }
       if (files.length) await addFiles(files, handles);
     },
     [addFiles],

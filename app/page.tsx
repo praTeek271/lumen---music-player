@@ -22,6 +22,7 @@ import { RestoringSkeleton } from "@/components/RestoringSkeleton";
 import { FirstLaunch } from "@/components/FirstLaunch";
 import { useMusicFolders } from "@/hooks/useMusicFolders";
 import { getSetting, saveSetting } from "@/lib/db";
+import { BackgroundPaths } from "@/components/ui/background-paths";
 
 /* ── Canvas 16×16 dominant-colour extractor ─────────────────────────────── */
 function extractRGB(src: string): Promise<[number, number, number]> {
@@ -503,17 +504,14 @@ export default function ImmersivePlayer() {
 /* ── Empty state — monochrome ────────────────────────────────────────────── */
 function EmptyState({ onOpen }: { onOpen: () => void }) {
   return (
+    // absolute inset-0 so the component actually fills <main> and
+    // BackgroundPaths' absolute inset-0 has a real bounding box to fill
     <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 24,
-        padding: "0 32px",
-        textAlign: "center",
-      }}
-      className="animate-fade-slide-up"
+      className="absolute inset-0 flex flex-col items-center justify-center animate-fade-slide-up"
+      style={{ padding: "0 32px", textAlign: "center" }}
     >
+      {/* Animated flowing paths — only visible when queue is empty */}
+      <BackgroundPaths />
       <div style={{ position: "relative" }}>
         {/* Subtle white glow — no colour */}
         <div
@@ -588,10 +586,8 @@ function EmptyState({ onOpen }: { onOpen: () => void }) {
         onMouseLeave={(e) =>
           (e.currentTarget.style.background = "rgba(255,255,255,0.10)")
         }
-        onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.97)")
-        }
-        onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")
-        }
+        onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.97)")}
+        onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
       >
         <Plus size={15} />
         Add Music
@@ -617,9 +613,9 @@ function parseM3U(text: string): string[] {
   const basenames: string[] = [];
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
+    if (!line || line.startsWith("#")) continue;
     // Extract just the filename from any absolute/relative path
-    const basename = line.split(/[\\/]/).pop() ?? '';
+    const basename = line.split(/[\\/]/).pop() ?? "";
     if (basename) basenames.push(basename);
   }
   return basenames;

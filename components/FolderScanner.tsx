@@ -1,7 +1,7 @@
 'use client';
 // components/FolderScanner.tsx - Folder scanning modal with results
 
-import { Folder, FolderOpen, Music, Loader2, X, FolderSearch } from 'lucide-react';
+import { Folder, FolderOpen, Music, Loader2, X, FolderSearch, ListMusic } from 'lucide-react';
 import { useFolderScanner, ScanResult } from '@/hooks/useFolderScanner';
 
 interface FolderScannerProps {
@@ -118,7 +118,14 @@ export function FolderScanner({ open, onClose }: FolderScannerProps) {
           {scanResults.length > 0 && (
             <div>
               <p className="text-white/50 text-xs mb-3 uppercase tracking-widest font-medium">
-                Found {scanResults.length} folder{scanResults.length > 1 ? 's' : ''}
+                {(() => {
+                  const folders = scanResults.filter(r => !r.isPlaylist).length;
+                  const playlists = scanResults.filter(r => r.isPlaylist).length;
+                  const parts = [];
+                  if (folders > 0) parts.push(`${folders} folder${folders !== 1 ? 's' : ''}`);
+                  if (playlists > 0) parts.push(`${playlists} playlist${playlists !== 1 ? 's' : ''}`);
+                  return `Found ${parts.join(' · ')}`;
+                })()}
               </p>
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {scanResults.map((result: ScanResult) => (
@@ -128,18 +135,32 @@ export function FolderScanner({ open, onClose }: FolderScannerProps) {
                       await playFolder(result);
                       onClose();
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left group transition-all hover:bg-purple-900/30"
-                    style={{ border: '1px solid rgba(255,255,255,0.06)' }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left group transition-all"
+                    style={{
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = result.isPlaylist ? 'rgba(20,184,166,0.10)' : 'rgba(124,58,237,0.15)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors group-hover:bg-purple-800/50"
-                      style={{ background: 'rgba(124,58,237,0.2)' }}>
-                      <Folder size={18} className="text-purple-400" />
+                    <div
+                      className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ background: result.isPlaylist ? 'rgba(20,184,166,0.18)' : 'rgba(124,58,237,0.2)' }}
+                    >
+                      {result.isPlaylist
+                        ? <ListMusic size={18} className="text-teal-400" />
+                        : <Folder size={18} className="text-purple-400" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-medium truncate">{result.folderName}</p>
-                      <p className="text-white/40 text-xs">{result.fileCount} track{result.fileCount > 1 ? 's' : ''}</p>
+                      <p className="text-white/40 text-xs">
+                        {result.isPlaylist ? 'Playlist · ' : ''}{result.fileCount} track{result.fileCount !== 1 ? 's' : ''}
+                      </p>
                     </div>
-                    <div className="text-purple-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity font-medium">
+                    <div
+                      className="text-xs opacity-0 group-hover:opacity-100 transition-opacity font-medium"
+                      style={{ color: result.isPlaylist ? 'rgb(45,212,191)' : 'rgb(167,139,250)' }}
+                    >
                       Add all →
                     </div>
                   </button>

@@ -588,8 +588,10 @@ function EmptyState({ onOpen }: { onOpen: () => void }) {
         onMouseLeave={(e) =>
           (e.currentTarget.style.background = "rgba(255,255,255,0.10)")
         }
-        onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.97)")}
-        onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+        onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.97)")
+        }
+        onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")
+        }
       >
         <Plus size={15} />
         Add Music
@@ -600,4 +602,25 @@ function EmptyState({ onOpen }: { onOpen: () => void }) {
       </p>
     </div>
   );
+}
+
+export interface ScanResult {
+  folderName: string;
+  fileCount: number;
+  files: File[];
+  handles: FileSystemFileHandle[];
+  isPlaylist?: boolean;
+}
+
+/** Parse an M3U/M3U8 playlist and return filenames in order. */
+function parseM3U(text: string): string[] {
+  const basenames: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    // Extract just the filename from any absolute/relative path
+    const basename = line.split(/[\\/]/).pop() ?? '';
+    if (basename) basenames.push(basename);
+  }
+  return basenames;
 }

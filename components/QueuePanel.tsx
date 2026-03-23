@@ -162,7 +162,7 @@ export function QueuePanel({ open, onClose }: QueuePanelProps) {
                     "rgba(255,80,80,0.65)")
                 }
               >
-                <Trash2 size={16} title="Clear all" />
+                <Trash2 size={16} />
               </button>
             )}
             <button
@@ -179,7 +179,7 @@ export function QueuePanel({ open, onClose }: QueuePanelProps) {
                 justifyContent: "center",
               }}
             >
-              <X size={16} title="Close" />
+              <X size={16}/>
             </button>
           </div>
         </div>
@@ -207,7 +207,6 @@ export function QueuePanel({ open, onClose }: QueuePanelProps) {
                 size={28}
                 className="mx-auto mb-3"
                 style={{ opacity: 0.2 }}
-                title="Queue is empty"
               />
               <p>Queue is empty</p>
               <p style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>

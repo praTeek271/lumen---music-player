@@ -71,7 +71,7 @@ export function useMusicFolders() {
           // One level of subdirectory
           try {
             for await (const sub of (
-              entry as FileSystemDirectoryHandle
+              entry as FileSystemDirectoryHandle as any
             ).values()) {
               if (sub.kind === "file") {
                 try {
@@ -174,9 +174,9 @@ export function useMusicFolders() {
     if (!hasSupport) return;
 
     try {
-      // @ts-ignore
-      const handle: FileSystemDirectoryHandle =
-        await window.showDirectoryPicker({ mode: "read" });
+      const handle: FileSystemDirectoryHandle = await (
+        window as any
+      ).showDirectoryPicker({ mode: "read" });
 
       // Request permission explicitly before saving
       const ok = await verifyPermission(handle);

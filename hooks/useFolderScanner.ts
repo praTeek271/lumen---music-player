@@ -17,6 +17,20 @@ export interface ScanResult {
   fileCount: number;
   files: File[];
   handles: FileSystemFileHandle[];
+  isPlaylist?: boolean;
+}
+
+/** Parse an M3U/M3U8 text and return each entry's basename in order. */
+function parseM3U(text: string): string[] {
+  const basenames: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    // Strip any absolute/relative path — keep only the filename
+    const basename = line.split(/[\\/]/).pop() ?? '';
+    if (basename) basenames.push(basename);
+  }
+  return basenames;
 }
 
 export function useFolderScanner() {
@@ -64,6 +78,11 @@ export function useFolderScanner() {
       const rootFiles: File[] = [];
       const rootHandles: FileSystemFileHandle[] = [];
 
+      // Map of lowercase filename → {file, handle} — used to resolve M3U entries
+      const allAudioFiles = new Map<string, { file: File; handle: FileSystemFileHandle }>();
+      // All M3U/M3U8 handles found anywhere in the scanned tree
+      const m3uHandles: Array<{ name: string; handle: FileSystemFileHandle }> = [];
+
       // Collect all top-level entries first into a plain array,
       // then process them — avoids async generator permission expiry
       const topLevel: [string, FileSystemHandle][] = [];
@@ -79,6 +98,9 @@ export function useFolderScanner() {
             if (isAudioFile(file)) {
               rootFiles.push(file);
               rootHandles.push(handle as FileSystemFileHandle);
+              allAudioFiles.set(file.name.toLowerCase(), { file, handle: handle as FileSystemFileHandle });
+            } else if (/\.m3u8?$/i.test(file.name)) {
+              m3uHandles.push({ name: file.name, handle: handle as FileSystemFileHandle });
             }
           } catch {
             /* unreadable file — skip */
@@ -99,10 +121,38 @@ export function useFolderScanner() {
                   if (isAudioFile(file)) {
                     subFiles.push(file);
                     subHandles.push(sub as FileSystemFileHandle);
+                    allAudioFiles.set(file.name.toLowerCase(), { file, handle: sub as FileSystemFileHandle });
+                  } else if (/\.m3u8?$/i.test(file.name)) {
+                    // M3U inside a subfolder (e.g. "Playlists/my.m3u")
+                    m3uHandles.push({ name: file.name, handle: sub as FileSystemFileHandle });
                   }
                 } catch {
                   /* skip unreadable file */
                 }
+              } else if ((sub as FileSystemHandle).kind === "directory") {
+                // One extra level — catches a dedicated "Playlists" subfolder
+                try {
+                  const deepEntries: [string, FileSystemHandle][] = [];
+                  for await (const deep of (sub as any).values()) {
+                    deepEntries.push([deep.name, deep]);
+                  }
+                  for (const [, deep] of deepEntries) {
+                    if ((deep as FileSystemHandle).kind === "file") {
+                      try {
+                        const file = await (deep as FileSystemFileHandle).getFile();
+                        if (/\.m3u8?$/i.test(file.name)) {
+                          m3uHandles.push({ name: file.name, handle: deep as FileSystemFileHandle });
+                        }
+                        // Audio files two levels deep are NOT added as a folder result
+                        // but ARE indexed so deeper-nested songs can still be resolved
+                        // by an M3U that references them.
+                        if (isAudioFile(file)) {
+                          allAudioFiles.set(file.name.toLowerCase(), { file, handle: deep as FileSystemFileHandle });
+                        }
+                      } catch { /* skip */ }
+                    }
+                  }
+                } catch { /* skip unreadable deep dir */ }
               }
             }
           } catch {
@@ -127,6 +177,35 @@ export function useFolderScanner() {
           files: rootFiles,
           handles: rootHandles,
         });
+      }
+
+      // Resolve every discovered M3U against the audio file index
+      for (const { name: m3uName, handle: m3uHandle } of m3uHandles) {
+        try {
+          const m3uFile = await m3uHandle.getFile();
+          const text = await m3uFile.text();
+          const basenames = parseM3U(text);
+
+          const playlistFiles: File[] = [];
+          const playlistHandles: FileSystemFileHandle[] = [];
+          for (const basename of basenames) {
+            const match = allAudioFiles.get(basename.toLowerCase());
+            if (match) {
+              playlistFiles.push(match.file);
+              playlistHandles.push(match.handle);
+            }
+          }
+
+          if (playlistFiles.length > 0) {
+            results.push({
+              folderName: m3uName.replace(/\.m3u8?$/i, ''),
+              fileCount: playlistFiles.length,
+              files: playlistFiles,
+              handles: playlistHandles,
+              isPlaylist: true,
+            });
+          }
+        } catch { /* skip unreadable M3U */ }
       }
 
       if (results.length === 0) {

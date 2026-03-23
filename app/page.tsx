@@ -510,8 +510,6 @@ function EmptyState({ onOpen }: { onOpen: () => void }) {
       className="absolute inset-0 flex flex-col items-center justify-center animate-fade-slide-up"
       style={{ padding: "0 32px", textAlign: "center" }}
     >
-      {/* Animated flowing paths — only visible when queue is empty */}
-      <BackgroundPaths />
       <div style={{ position: "relative" }}>
         {/* Subtle white glow — no colour */}
         <div
@@ -572,7 +570,7 @@ function EmptyState({ onOpen }: { onOpen: () => void }) {
           padding: "10px 24px",
           borderRadius: 12,
           cursor: "pointer",
-          background: "rgba(255,255,255,0.10)",
+          background: "rgba(255, 255, 255, 0.5)",
           border: "1px solid rgba(255,255,255,0.18)",
           color: "rgba(255,255,255,0.85)",
           fontSize: 13,
@@ -596,6 +594,9 @@ function EmptyState({ onOpen }: { onOpen: () => void }) {
       <p style={{ fontSize: 11, color: "rgba(255,255,255,0.18)" }}>
         or drag &amp; drop audio files anywhere
       </p>
+
+      {/* Animated flowing paths — only visible when queue is empty */}
+      <BackgroundPaths />
     </div>
   );
 }

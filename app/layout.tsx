@@ -20,6 +20,8 @@ export const metadata: Metadata = {
   other: {
     "mobile-web-app-capable": "yes",
     "msapplication-TileColor": "#0a0a0a",
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "black-translucent",
   },
 };
 

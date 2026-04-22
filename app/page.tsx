@@ -7,7 +7,15 @@
 //  • Empty / top bar   → pure black monochrome
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Plus, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Plus,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Maximize2,
+  Minimize2,
+} from "lucide-react";
 
 import { usePlayer } from "@/lib/playerStore";
 import { useDragDrop } from "@/hooks/useDragDrop";
@@ -84,6 +92,134 @@ function useInstallPrompt() {
   return { canInstall: !!prompt, install };
 }
 
+/* ── Detect mobile landscape: width > height AND height < 600 px ─────────── */
+function useIsLandscapeMobile() {
+  const [isLandscape, setIsLandscape] = useState(false);
+  useEffect(() => {
+    const check = () =>
+      setIsLandscape(
+        window.innerWidth > window.innerHeight && window.innerHeight < 600,
+      );
+    check();
+    window.addEventListener("resize", check);
+    window.addEventListener("orientationchange", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      window.removeEventListener("orientationchange", check);
+    };
+  }, []);
+  return isLandscape;
+}
+
+/* ── Fullscreen intent overlay ───────────────────────────────────────────── */
+// Shown for 3 s when the auto-hide timer wants to enter fullscreen.
+// Tap → confirm (calls requestFullscreen inside a native touchend = valid gesture).
+// Any swipe or timeout → cancel.
+function FsPromptOverlay({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const divRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = divRef.current;
+    if (!el) return;
+    let sx = 0,
+      sy = 0;
+    const onStart = (e: TouchEvent) => {
+      sx = e.touches[0].clientX;
+      sy = e.touches[0].clientY;
+    };
+    const onEnd = (e: TouchEvent) => {
+      const dx = Math.abs(e.changedTouches[0].clientX - sx);
+      const dy = Math.abs(e.changedTouches[0].clientY - sy);
+      if (dx > 20 || dy > 20) {
+        onCancel(); // swipe → dismiss without fullscreen
+      } else {
+        onConfirm(); // tap inside touchend handler = valid gesture context
+      }
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchend", onEnd);
+    const timer = setTimeout(onCancel, 3000);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchend", onEnd);
+      clearTimeout(timer);
+    };
+  }, [onConfirm, onCancel]);
+
+  return (
+    <div
+      ref={divRef}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9990,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.50)",
+        WebkitBackdropFilter: "blur(3px)",
+        backdropFilter: "blur(3px)",
+      }}
+      aria-label="Tap to enter fullscreen"
+    >
+      {/* Expanding ripple rings */}
+      <div
+        style={{
+          position: "relative",
+          width: 72,
+          height: 72,
+          marginBottom: 22,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              width: "100%",
+              height: "100%",
+              borderRadius: "50%",
+              border: "1.5px solid rgba(255,255,255,0.40)",
+              animation: `fsRipple 2s ease-out ${i * 0.65}s infinite`,
+            }}
+          />
+        ))}
+        <Maximize2
+          size={22}
+          style={{ color: "rgba(255,255,255,0.82)", position: "relative" }}
+        />
+      </div>
+
+      <p
+        style={{
+          color: "rgba(255,255,255,0.88)",
+          fontSize: 15,
+          fontWeight: 600,
+          margin: 0,
+          letterSpacing: "0.01em",
+        }}
+      >
+        Tap for fullscreen
+      </p>
+      <p
+        style={{ color: "rgba(255,255,255,0.36)", fontSize: 12, marginTop: 6 }}
+      >
+        Swipe to dismiss
+      </p>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 export default function ImmersivePlayer() {
@@ -96,6 +232,15 @@ export default function ImmersivePlayer() {
   const [queueOpen, setQueueOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [showFirstLaunch, setShowFirstLaunch] = useState(false);
+
+  // ── Landscape mobile: bar auto-hide / swipe-to-reveal ─────────────────
+  const isLandscapeMobile = useIsLandscapeMobile();
+  const [barVisible, setBarVisible] = useState(true);
+  const barAutoHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const barInactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const swipeTouchRef = useRef<{ x: number; y: number } | null>(null);
+  const [showFsOverlay, setShowFsOverlay] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const { syncSavedFolders } = useMusicFolders();
 
@@ -163,10 +308,160 @@ export default function ImmersivePlayer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [next, prev, toggle]);
 
+  // Auto-hide bar 1.5 s after entering landscape; restore immediately on exit
+  useEffect(() => {
+    if (barAutoHideRef.current) clearTimeout(barAutoHideRef.current);
+    if (barInactivityRef.current) clearTimeout(barInactivityRef.current);
+    if (isLandscapeMobile) {
+      setBarVisible(true);
+      // Step 1: hide bar after 1.5 s
+      // Step 2: 3 s after bar hides, arm fullscreen (only when music is playing)
+      barAutoHideRef.current = setTimeout(() => {
+        setBarVisible(false);
+        if (queue.length > 0) {
+          barInactivityRef.current = setTimeout(() => {
+            if (
+              !document.fullscreenElement &&
+              !(document as any).webkitFullscreenElement
+            )
+              setShowFsOverlay(true);
+          }, 3000);
+        }
+      }, 1500);
+
+      return () => {
+        if (barAutoHideRef.current) clearTimeout(barAutoHideRef.current);
+        if (barInactivityRef.current) clearTimeout(barInactivityRef.current);
+        setShowFsOverlay(false);
+      };
+    } else {
+      // Exit fullscreen when leaving landscape
+      try {
+        const isFs =
+          document.fullscreenElement ||
+          (document as any).webkitFullscreenElement;
+        if (isFs) {
+          if (document.exitFullscreen) document.exitFullscreen();
+          else if ((document as any).webkitExitFullscreen)
+            (document as any).webkitExitFullscreen();
+        }
+      } catch {
+        /* ignore */
+      }
+      setShowFsOverlay(false);
+      setBarVisible(true);
+    }
+    return () => {
+      if (barAutoHideRef.current) clearTimeout(barAutoHideRef.current);
+    };
+  }, [isLandscapeMobile, queue.length]);
+
+  // Restart 3 s inactivity timer whenever user touches any button on the bar
+  const resetBarInactivity = useCallback(() => {
+    if (!isLandscapeMobile) return;
+    if (barInactivityRef.current) clearTimeout(barInactivityRef.current);
+    barInactivityRef.current = setTimeout(() => {
+      setBarVisible(false);
+      // Arm fullscreen 3 s after inactivity hide too (only with music)
+      if (queue.length > 0) {
+        setTimeout(() => {
+          if (
+            !document.fullscreenElement &&
+            !(document as any).webkitFullscreenElement
+          )
+            setShowFsOverlay(true);
+        }, 3000);
+      }
+    }, 3000);
+  }, [isLandscapeMobile, queue.length]);
+
+  // Sync isFullscreen state with the actual Fullscreen API
+  useEffect(() => {
+    const onChange = () =>
+      setIsFullscreen(
+        !!(
+          document.fullscreenElement ||
+          (document as any).webkitFullscreenElement
+        ),
+      );
+    document.addEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange);
+    };
+  }, []);
+
+  // Called by FsPromptOverlay.onConfirm — native touchend on the overlay element
+  // is the valid gesture context that makes requestFullscreen() work.
+  const triggerFullscreen = useCallback(() => {
+    setShowFsOverlay(false);
+    try {
+      const el = document.documentElement as any;
+      const isFs =
+        document.fullscreenElement || (document as any).webkitFullscreenElement;
+      if (!isFs) {
+        if (el.requestFullscreen) el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      }
+    } catch {
+      /* no-op */
+    }
+  }, []);
+
+  // Fallback manual toggle via the header button
+  const toggleFullscreen = useCallback(() => {
+    try {
+      const isFs =
+        document.fullscreenElement || (document as any).webkitFullscreenElement;
+      if (isFs) {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if ((document as any).webkitExitFullscreen)
+          (document as any).webkitExitFullscreen();
+      } else {
+        const el = document.documentElement as any;
+        if (el.requestFullscreen) el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      }
+    } catch {
+      /* no-op */
+    }
+  }, []);
+
+  // Track touch start position for swipe-up detection (page-level)
+  const onPageTouchStart = useCallback((e: React.TouchEvent) => {
+    swipeTouchRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  }, []);
+
+  // Swipe up anywhere → reveal bar (landscape + bar hidden only)
+  const onPageTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (!swipeTouchRef.current) return;
+      const dx = e.changedTouches[0].clientX - swipeTouchRef.current.x;
+      const dy = e.changedTouches[0].clientY - swipeTouchRef.current.y;
+      swipeTouchRef.current = null;
+      if (
+        isLandscapeMobile &&
+        !barVisible &&
+        dy < -40 &&
+        Math.abs(dy) > Math.abs(dx)
+      ) {
+        setBarVisible(true);
+        resetBarInactivity();
+      }
+    },
+    [isLandscapeMobile, barVisible, resetBarInactivity],
+  );
+
   return (
     <div
       className="relative w-full h-full flex flex-col overflow-hidden"
       style={{ background: "#0a0a0a" }}
+      onTouchStart={onPageTouchStart}
+      onTouchEnd={onPageTouchEnd}
     >
       {/* ── First-launch permission screen ──────────────────────────────── */}
       {showFirstLaunch && (
@@ -310,8 +605,17 @@ export default function ImmersivePlayer() {
         aria-hidden
       />
 
-      {/* ── TOP BAR ─────────────────────────────────────────────────────── */}
-      <header className="relative z-10 flex items-center justify-between px-5 pt-5 pb-0 safe-top flex-shrink-0">
+      {/* ── TOP BAR — slides up out of view in landscape when bar hidden ── */}
+      <header
+        className="relative z-10 flex items-center justify-between px-5 pt-5 pb-0 safe-top flex-shrink-0"
+        style={{
+          transition: "transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
+          transform:
+            isLandscapeMobile && !barVisible
+              ? "translateY(-110%)"
+              : "translateY(0)",
+        }}
+      >
         <div>
           <h1
             style={{
@@ -397,6 +701,36 @@ export default function ImmersivePlayer() {
             <Plus size={11} />
             Add Music
           </button>
+
+          {/* Fullscreen toggle — always-visible fallback */}
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              cursor: "pointer",
+              color: "rgba(255,255,255,0.50)",
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,0.14)",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={(e) =>
+              ((e.currentTarget as HTMLElement).style.background =
+                "rgba(255,255,255,0.07)")
+            }
+            onMouseLeave={(e) =>
+              ((e.currentTarget as HTMLElement).style.background =
+                "transparent")
+            }
+          >
+            {isFullscreen ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+          </button>
         </div>
       </header>
 
@@ -480,10 +814,22 @@ export default function ImmersivePlayer() {
       </main>
 
       {/* ── PLAYBACK PILL ────────────────────────────────────────────────── */}
+      {/* In landscape-mobile: fixed at bottom, slides out; portrait: normal flow */}
       {(queue.length > 0 || restoring) && (
         <div
-          className="relative z-10 flex-shrink-0 px-3"
-          style={{ paddingBottom: "max(14px, env(safe-area-inset-bottom))" }}
+          className="z-20 px-3"
+          style={{
+            ...(isLandscapeMobile
+              ? { position: "fixed", bottom: 0, left: 0, right: 0 }
+              : { position: "relative", flexShrink: 0 }),
+            paddingBottom: "max(14px, env(safe-area-inset-bottom))",
+            transition: "transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
+            transform:
+              isLandscapeMobile && !barVisible
+                ? "translateY(110%)"
+                : "translateY(0)",
+          }}
+          onPointerDown={resetBarInactivity}
         >
           <PlaybackBar
             onQueueOpen={() => setQueueOpen(true)}
@@ -491,6 +837,28 @@ export default function ImmersivePlayer() {
             onPickFiles={openFilePicker}
           />
         </div>
+      )}
+
+      {/* ── Swipe-up hint shown when bar is hidden in landscape ───────────── */}
+      {isLandscapeMobile && !barVisible && (queue.length > 0 || restoring) && (
+        <div
+          className="fixed bottom-3 left-1/2 z-10 pointer-events-none"
+          style={{ transform: "translateX(-50%)" }}
+        >
+          <ChevronUp
+            size={18}
+            className="animate-bounce"
+            style={{ color: "rgba(255,255,255,0.30)" }}
+          />
+        </div>
+      )}
+
+      {/* ── Fullscreen prompt overlay — only when not already in fullscreen ── */}
+      {showFsOverlay && !isFullscreen && (
+        <FsPromptOverlay
+          onConfirm={triggerFullscreen}
+          onCancel={() => setShowFsOverlay(false)}
+        />
       )}
 
       {/* ── OVERLAYS ─────────────────────────────────────────────────────── */}

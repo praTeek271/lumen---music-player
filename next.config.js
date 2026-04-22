@@ -1,10 +1,18 @@
+// @ts-check
+const withPWA = require("@ducanh2912/next-pwa").default({
+  dest: "public",
+  disable: process.env.NODE_ENV === "development",
+  register: true,
+  skipWaiting: true,
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
 
   // Next.js 15: experimental features for better performance
   experimental: {
-    optimizePackageImports: ['lucide-react', 'react-icons'],
+    optimizePackageImports: ["lucide-react", "react-icons"],
   },
 
   webpack(config, { isServer }) {
@@ -24,24 +32,27 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/sw.js',
+        source: "/sw.js",
         headers: [
-          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-          { key: 'Service-Worker-Allowed', value: '/' },
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+          { key: "Service-Worker-Allowed", value: "/" },
         ],
       },
       {
         // Security headers for PWA
-        source: '/(.*)',
+        source: "/(.*)",
         headers: [
-          { key: 'X-Content-Type-Options',    value: 'nosniff' },
-          { key: 'X-Frame-Options',           value: 'DENY' },
-          { key: 'Referrer-Policy',           value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy',        value: 'camera=(), microphone=()' },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=()" },
         ],
       },
     ];
   },
 };
 
-module.exports = nextConfig;
+module.exports = withPWA(nextConfig);
